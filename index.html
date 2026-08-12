@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Horarios de Juli</title>
+<style>
+  :root {
+    --bg: #f5f3ef;
+    --card: #ffffff;
+    --ink: #2b2b2b;
+    --muted: #767267;
+    --accent: #b5651d;
+    --accent-soft: #f0e2d1;
+    --line: #e5e0d8;
+    --danger: #b3403a;
+    --total-bg: #2b2b2b;
+    --total-ink: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 20px 14px 60px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 {
+    font-size: 1.5rem;
+    margin: 4px 0 2px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+  }
+  .total-card {
+    background: var(--total-bg);
+    color: var(--total-ink);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .total-card .label { font-size: 0.95rem; opacity: 0.85; }
+  .total-card .value { font-size: 1.8rem; font-weight: 700; }
+  .day-card {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+  }
+  .day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .day-name { font-weight: 600; font-size: 1.05rem; }
+  .day-hours {
+    font-size: 0.85rem;
+    color: var(--muted);
+    background: var(--accent-soft);
+    padding: 2px 9px;
+    border-radius: 20px;
+  }
+  .block-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+  }
+  .block-row input[type="time"] {
+    flex: 1;
+    padding: 8px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    font-size: 0.95rem;
+    background: #fbfaf8;
+    color: var(--ink);
+    min-width: 0;
+  }
+  .block-row .sep { color: var(--muted); font-size: 0.85rem; }
+  .icon-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 4px 8px;
+    border-radius: 8px;
+    color: var(--danger);
+    line-height: 1;
+  }
+  .icon-btn:active { background: #f1dcd9; }
+  .add-block-btn {
+    margin-top: 6px;
+    border: 1px dashed var(--line);
+    background: none;
+    color: var(--accent);
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    width: 100%;
+  }
+  .add-block-btn:active { background: var(--accent-soft); }
+  .empty-day {
+    color: var(--muted);
+    font-size: 0.88rem;
+    font-style: italic;
+    margin: 4px 0 8px;
+  }
+  .footer-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  .footer-actions button {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .footer-actions button.reset { color: var(--danger); }
+  .saved-note {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Horarios de Juli</h1>
+  <div class="subtitle">Cargá y editá los horarios de cada día. El total semanal se calcula solo.</div>
+
+  <div class="total-card">
+    <span class="label">Total semanal</span>
+    <span class="value" id="weekTotal">0 h</span>
+  </div>
+
+  <div id="days"></div>
+
+  <div class="footer-actions">
+    <button class="reset" id="resetBtn">Restaurar horario de agosto</button>
+  </div>
+  <div class="saved-note">Los cambios se guardan automáticamente en este dispositivo.</div>
+</div>
+
+<script>
+const STORAGE_KEY = "horarios_juli_v1";
+
+const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+
+// Horario tal como figura en la cartelera de agosto (foto). Editable desde la app.
+const DEFAULT_SCHEDULE = [
+  { blocks: [{ start: "11:30", end: "17:30" }] }, // Lunes
+  { blocks: [{ start: "09:00", end: "16:00" }] }, // Martes
+  { blocks: [{ start: "11:30", end: "17:30" }] }, // Miércoles
+  { blocks: [] },                                  // Jueves (libre)
+  { blocks: [{ start: "09:30", end: "16:30" }] }, // Viernes (sin almuerzo)
+  { blocks: [] },                                  // Sábado
+  { blocks: [] },                                  // Domingo
+];
+
+function loadSchedule() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return structuredClone(DEFAULT_SCHEDULE);
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length === 7) return parsed;
+  } catch (e) {}
+  return structuredClone(DEFAULT_SCHEDULE);
+}
+
+function saveSchedule() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(schedule));
+}
+
+let schedule = loadSchedule();
+
+function timeToMinutes(t) {
+  if (!t) return null;
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function blockHours(block) {
+  const s = timeToMinutes(block.start);
+  const e = timeToMinutes(block.end);
+  if (s === null || e === null) return 0;
+  let diff = e - s;
+  if (diff < 0) diff += 24 * 60; // por si cruza medianoche
+  return diff / 60;
+}
+
+function dayHours(day) {
+  return day.blocks.reduce((sum, b) => sum + blockHours(b), 0);
+}
+
+function weekHours() {
+  return schedule.reduce((sum, d) => sum + dayHours(d), 0);
+}
+
+function formatHours(h) {
+  const rounded = Math.round(h * 100) / 100;
+  return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(2)) + " h";
+}
+
+function render() {
+  const container = document.getElementById("days");
+  container.innerHTML = "";
+
+  DAY_NAMES.forEach((name, dayIdx) => {
+    const day = schedule[dayIdx];
+    const card = document.createElement("div");
+    card.className = "day-card";
+
+    const header = document.createElement("div");
+    header.className = "day-header";
+    header.innerHTML = `<span class="day-name">${name}</span><span class="day-hours">${formatHours(dayHours(day))}</span>`;
+    card.appendChild(header);
+
+    if (day.blocks.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-day";
+      empty.textContent = "No trabaja";
+      card.appendChild(empty);
+    }
+
+    day.blocks.forEach((block, blockIdx) => {
+      const row = document.createElement("div");
+      row.className = "block-row";
+
+      const startInput = document.createElement("input");
+      startInput.type = "time";
+      startInput.value = block.start || "";
+      startInput.addEventListener("change", (e) => {
+        block.start = e.target.value;
+        saveSchedule();
+        render();
+      });
+
+      const sep = document.createElement("span");
+      sep.className = "sep";
+      sep.textContent = "a";
+
+      const endInput = document.createElement("input");
+      endInput.type = "time";
+      endInput.value = block.end || "";
+      endInput.addEventListener("change", (e) => {
+        block.end = e.target.value;
+        saveSchedule();
+        render();
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "icon-btn";
+      removeBtn.textContent = "✕";
+      removeBtn.title = "Quitar este horario";
+      removeBtn.addEventListener("click", () => {
+        day.blocks.splice(blockIdx, 1);
+        saveSchedule();
+        render();
+      });
+
+      row.appendChild(startInput);
+      row.appendChild(sep);
+      row.appendChild(endInput);
+      row.appendChild(removeBtn);
+      card.appendChild(row);
+    });
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "add-block-btn";
+    addBtn.textContent = "+ agregar horario";
+    addBtn.addEventListener("click", () => {
+      day.blocks.push({ start: "09:00", end: "13:00" });
+      saveSchedule();
+      render();
+    });
+    card.appendChild(addBtn);
+
+    container.appendChild(card);
+  });
+
+  document.getElementById("weekTotal").textContent = formatHours(weekHours());
+}
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (confirm("¿Restaurar el horario de agosto (el de la foto)? Se van a perder los cambios manuales.")) {
+    schedule = structuredClone(DEFAULT_SCHEDULE);
+    saveSchedule();
+    render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>
