@@ -108,6 +108,27 @@
     width: 100%;
   }
   .add-block-btn:active { background: var(--accent-soft); }
+  .lunch-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+  .lunch-row label {
+    font-size: 0.88rem;
+    color: var(--muted);
+  }
+  .lunch-row input[type="number"] {
+    width: 64px;
+    padding: 7px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    font-size: 0.95rem;
+    background: #fbfaf8;
+    color: var(--ink);
+  }
   .empty-day {
     color: var(--muted);
     font-size: 0.88rem;
@@ -162,14 +183,15 @@ const STORAGE_KEY = "horarios_juli_v1";
 const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 // Horario tal como figura en la cartelera de agosto (foto). Editable desde la app.
+// El almuerzo son 30 min por defecto, salvo el viernes que ya tiene el corte entre los dos turnos.
 const DEFAULT_SCHEDULE = [
-  { blocks: [{ start: "11:30", end: "17:30" }] }, // Lunes
-  { blocks: [{ start: "09:00", end: "16:00" }] }, // Martes
-  { blocks: [{ start: "11:30", end: "17:30" }] }, // Miércoles
-  { blocks: [] },                                  // Jueves (libre)
-  { blocks: [{ start: "09:30", end: "16:30" }] }, // Viernes (sin almuerzo)
-  { blocks: [] },                                  // Sábado
-  { blocks: [] },                                  // Domingo
+  { blocks: [{ start: "11:30", end: "17:30" }], lunchMinutes: 30 }, // Lunes
+  { blocks: [{ start: "09:00", end: "16:00" }], lunchMinutes: 30 }, // Martes
+  { blocks: [{ start: "11:30", end: "17:30" }], lunchMinutes: 30 }, // Miércoles
+  { blocks: [], lunchMinutes: 0 },                                  // Jueves (libre)
+  { blocks: [{ start: "09:30", end: "10:30" }, { start: "11:00", end: "16:30" }], lunchMinutes: 0 }, // Viernes (sin almuerzo)
+  { blocks: [], lunchMinutes: 0 },                                  // Sábado
+  { blocks: [], lunchMinutes: 0 },                                  // Domingo
 ];
 
 function loadSchedule() {
@@ -177,7 +199,15 @@ function loadSchedule() {
   if (!raw) return structuredClone(DEFAULT_SCHEDULE);
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length === 7) return parsed;
+    if (Array.isArray(parsed) && parsed.length === 7) {
+      // migración: los horarios guardados antes de agregar el almuerzo no tienen lunchMinutes
+      parsed.forEach((day, i) => {
+        if (day.lunchMinutes === undefined) {
+          day.lunchMinutes = DEFAULT_SCHEDULE[i].lunchMinutes;
+        }
+      });
+      return parsed;
+    }
   } catch (e) {}
   return structuredClone(DEFAULT_SCHEDULE);
 }
@@ -204,7 +234,9 @@ function blockHours(block) {
 }
 
 function dayHours(day) {
-  return day.blocks.reduce((sum, b) => sum + blockHours(b), 0);
+  const worked = day.blocks.reduce((sum, b) => sum + blockHours(b), 0);
+  const lunch = (day.lunchMinutes || 0) / 60;
+  return Math.max(0, worked - lunch);
 }
 
 function weekHours() {
@@ -289,6 +321,35 @@ function render() {
       render();
     });
     card.appendChild(addBtn);
+
+    const lunchRow = document.createElement("div");
+    lunchRow.className = "lunch-row";
+
+    const lunchLabel = document.createElement("label");
+    lunchLabel.textContent = "Almuerzo";
+    lunchLabel.htmlFor = `lunch-${dayIdx}`;
+
+    const lunchInput = document.createElement("input");
+    lunchInput.type = "number";
+    lunchInput.id = `lunch-${dayIdx}`;
+    lunchInput.min = "0";
+    lunchInput.step = "5";
+    lunchInput.value = day.lunchMinutes || 0;
+    lunchInput.addEventListener("change", (e) => {
+      const val = parseInt(e.target.value, 10);
+      day.lunchMinutes = isNaN(val) || val < 0 ? 0 : val;
+      saveSchedule();
+      render();
+    });
+
+    const lunchUnit = document.createElement("span");
+    lunchUnit.className = "sep";
+    lunchUnit.textContent = "min";
+
+    lunchRow.appendChild(lunchLabel);
+    lunchRow.appendChild(lunchInput);
+    lunchRow.appendChild(lunchUnit);
+    card.appendChild(lunchRow);
 
     container.appendChild(card);
   });
