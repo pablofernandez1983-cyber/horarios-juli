@@ -183,13 +183,13 @@ const STORAGE_KEY = "horarios_juli_v1";
 const DAY_NAMES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 // Horario tal como figura en la cartelera de agosto (foto). Editable desde la app.
-// El almuerzo son 30 min por defecto, salvo el viernes que ya tiene el corte entre los dos turnos.
+// El almuerzo son 30 min por defecto, salvo el viernes que es corrido y sin almuerzo.
 const DEFAULT_SCHEDULE = [
   { blocks: [{ start: "11:30", end: "17:30" }], lunchMinutes: 30 }, // Lunes
   { blocks: [{ start: "09:00", end: "16:00" }], lunchMinutes: 30 }, // Martes
   { blocks: [{ start: "11:30", end: "17:30" }], lunchMinutes: 30 }, // Miércoles
   { blocks: [], lunchMinutes: 0 },                                  // Jueves (libre)
-  { blocks: [{ start: "09:30", end: "10:30" }, { start: "11:00", end: "16:30" }], lunchMinutes: 0 }, // Viernes (sin almuerzo)
+  { blocks: [{ start: "09:30", end: "14:00" }], lunchMinutes: 0 },  // Viernes (corrido, sin almuerzo)
   { blocks: [], lunchMinutes: 0 },                                  // Sábado
   { blocks: [], lunchMinutes: 0 },                                  // Domingo
 ];
